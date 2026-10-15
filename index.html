@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Градостроительный Симулятор</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="960" height="540"></canvas>
+        
+        <div id="hud">
+            <div class="hud-item">
+                <span class="hud-label">Уровень:</span>
+                <span class="hud-value" id="hud-level">1</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Опыт:</span>
+                <span class="hud-value" id="hud-xp">0/100</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Жители:</span>
+                <span class="hud-value" id="hud-citizens">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Бюджет:</span>
+                <span class="hud-value" id="hud-budget">1000</span>
+            </div>
+        </div>
+
+        <div id="controls-hint">
+            <p>Управление: ← → для движения, ↑ для прыжка</p>
+            <p>На мобильном: используйте экранные кнопки</p>
+        </div>
+
+        <div id="screen-buttons">
+            <button id="btn-left" class="control-btn">←</button>
+            <button id="btn-jump" class="control-btn">↑</button>
+            <button id="btn-right" class="control-btn">→</button>
+        </div>
+
+        <div id="screen-switch">
+            <button id="btn-switch-screen">Переключить экран</button>
+        </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
