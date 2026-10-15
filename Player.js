@@ -1,69 +1,170 @@
-// Персонаж-мэр для платформенных мини-игр
-
-import { resolveCollision } from './collision.js';
+// Player.js — персонаж-мэр для платформенных мини-игр
 
 export class Player {
     constructor(x, y) {
+        // Позиция и размеры
         this.x = x;
         this.y = y;
-        this.width = 28;
-        this.height = 40;
+        this.w = 28;
+        this.h = 40;
+
+        // Скорость (px/sec)
         this.vx = 0;
         this.vy = 0;
-        this.speed = 220;          // px/sec
-        this.jumpForce = -420;     // px/sec
-        this.gravity = 1200;       // px/sec^2
+
+        // Параметры движения
+        this.maxSpeed = 220;        // максимальная горизонтальная скорость
+        this.acceleration = 1600;   // ускорение при движении
+        this.friction = 1400;       // замедление при отсутствии ввода
+        this.jumpForce = -420;      // импульс прыжка
+        this.gravity = 1200;        // гравитация (px/sec^2)
+        this.maxFallSpeed = 800;    // ограничение скорости падения
+
+        // Состояние
         this.onGround = false;
         this.facingRight = true;
+
+        // Анимация
+        this.animTime = 0;
+        this.isJumping = false;
+
+        // Цвета
         this.color = '#4A90E2';
         this.hatColor = '#2C3E50';
         this.skinColor = '#F5CBA7';
-        this.animTime = 0;
-        this.isJumping = false;
     }
 
+    /**
+     * Обновление состояния игрока
+     * @param {number} dt — время кадра в секундах
+     * @param {Input} input — объект ввода
+     * @param {Array} solids — массив AABB-препятствий {x, y, width, height}
+     */
     update(dt, input, solids) {
-        // Горизонтальное движение
-        let moveX = 0;
-        if (input.keys.left) moveX -= 1;
-        if (input.keys.right) moveX += 1;
+        // -----------------------------------------------------------
+        // Горизонтальное движение с плавным ускорением
+        // -----------------------------------------------------------
+        let moveDir = 0;
+        if (input.keys.left) moveDir -= 1;
+        if (input.keys.right) moveDir += 1;
 
-        this.vx = moveX * this.speed;
-        if (moveX > 0) this.facingRight = true;
-        else if (moveX < 0) this.facingRight = false;
+        if (moveDir !== 0) {
+            // Ускорение в сторону движения
+            this.vx += moveDir * this.acceleration * dt;
 
+            // Ограничение максимальной скорости
+            if (this.vx > this.maxSpeed) this.vx = this.maxSpeed;
+            if (this.vx < -this.maxSpeed) this.vx = -this.maxSpeed;
+
+            // Поворот
+            if (moveDir > 0) this.facingRight = true;
+            else if (moveDir < 0) this.facingRight = false;
+        } else {
+            // Трение (плавное замедление)
+            const frictionAmount = this.friction * dt;
+            if (Math.abs(this.vx) <= frictionAmount) {
+                this.vx = 0;
+            } else {
+                this.vx -= Math.sign(this.vx) * frictionAmount;
+            }
+        }
+
+        // -----------------------------------------------------------
         // Прыжок
+        // -----------------------------------------------------------
         if (input.consumeJump() && this.onGround) {
             this.vy = this.jumpForce;
             this.onGround = false;
             this.isJumping = true;
         }
 
+        // -----------------------------------------------------------
         // Гравитация
+        // -----------------------------------------------------------
         this.vy += this.gravity * dt;
-        if (this.vy > 800) this.vy = 800;
+        if (this.vy > this.maxFallSpeed) this.vy = this.maxFallSpeed;
 
-        // Движение с коллизиями
-        const velocity = { x: this.vx * dt, y: this.vy * dt };
-        const result = resolveCollision(this, solids, velocity);
-        
-        this.onGround = result.onGround;
-        if (this.onGround) this.isJumping = false;
+        // -----------------------------------------------------------
+        // Движение с разрешением коллизий (по осям)
+        // -----------------------------------------------------------
+        this._moveAndCollide(dt, solids);
 
-        // Обновление анимации
-        if (moveX !== 0 && this.onGround) {
-            this.animTime += dt * 8;
+        // -----------------------------------------------------------
+        // Анимация ходьбы
+        // -----------------------------------------------------------
+        if (this.onGround && Math.abs(this.vx) > 10) {
+            this.animTime += dt * 10;
+        } else if (this.onGround) {
+            // Плавное затухание анимации
+            this.animTime += dt * 4;
         }
 
-        // Границы уровня
-        if (this.x < 0) this.x = 0;
+        if (this.onGround) {
+            this.isJumping = false;
+        }
     }
 
+    // ---------------------------------------------------------------
+    // Движение по осям с разрешением коллизий
+    // ---------------------------------------------------------------
+    _moveAndCollide(dt, solids) {
+        // --- Ось X ---
+        this.x += this.vx * dt;
+        for (const solid of solids) {
+            if (this._aabb(this.x, this.y, this.w, this.h, solid)) {
+                if (this.vx > 0) {
+                    this.x = solid.x - this.w;
+                } else if (this.vx < 0) {
+                    this.x = solid.x + solid.width;
+                }
+                this.vx = 0;
+            }
+        }
+
+        // --- Ось Y ---
+        this.y += this.vy * dt;
+        this.onGround = false;
+
+        for (const solid of solids) {
+            if (this._aabb(this.x, this.y, this.w, this.h, solid)) {
+                if (this.vy > 0) {
+                    // Падение — встаём на поверхность
+                    this.y = solid.y - this.h;
+                    this.vy = 0;
+                    this.onGround = true;
+                } else if (this.vy < 0) {
+                    // Удар головой о потолок
+                    this.y = solid.y + solid.height;
+                    this.vy = 0;
+                }
+            }
+        }
+
+        // Границы уровня (слева/справа)
+        if (this.x < 0) {
+            this.x = 0;
+            this.vx = 0;
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // AABB-проверка пересечения
+    // ---------------------------------------------------------------
+    _aabb(x, y, w, h, rect) {
+        return x < rect.x + rect.width &&
+               x + w > rect.x &&
+               y < rect.y + rect.height &&
+               y + h > rect.y;
+    }
+
+    // ---------------------------------------------------------------
+    // Отрисовка
+    // ---------------------------------------------------------------
     draw(ctx) {
         const x = Math.round(this.x);
         const y = Math.round(this.y);
-        const w = this.width;
-        const h = this.height;
+        const w = this.w;
+        const h = this.h;
 
         ctx.save();
 
